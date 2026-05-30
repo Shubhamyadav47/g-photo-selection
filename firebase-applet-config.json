@@ -3,7 +3,7 @@
   "appId": "1:710287427063:web:bcb337dcb52d4840e61af2",
   "apiKey": "AIzaSyA6-msL_xH4hcsAD8WdSFDsxCivup04294",
   "authDomain": "nomadic-abbey-lrtgb.firebaseapp.com",
-    "firestoreDatabaseId": "ai-studio-d69e675c-2277-4d80-9042-90e27e01b8fe",
+  "firestoreDatabaseId": "ai-studio-d69e675c-2277-4d80-9042-90e27e01b8fe",
   "storageBucket": "nomadic-abbey-lrtgb.firebasestorage.app",
   "messagingSenderId": "710287427063",
   "measurementId": ""
