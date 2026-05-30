@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers for Identity, Type Safety, and Wallet Protection
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation blueprints for our main entities
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 && data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 200
+        && data.credits is int && data.credits >= 0 && data.credits <= 1000
+        && (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100))
+        && (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500));
+    }
+
+    function isValidGallery(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.imagesCount is int && data.imagesCount >= 0 && data.imagesCount <= 500
+        && data.whatsappNumber is string && data.whatsappNumber.size() <= 30
+        && data.hasPassword is bool;
+    }
+
+    function isValidTransaction(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.amount is int && (data.amount == 25 || data.amount == 120 || data.amount == 220 || data.amount == 500)
+        && data.creditsAdded is int && (data.creditsAdded == 1 || data.creditsAdded == 5 || data.creditsAdded == 10 || data.creditsAdded == 25)
+        && data.status is string && (data.status == "completed" || data.status == "pending" || data.status == "failed")
+        && data.paymentMethod is string && data.paymentMethod.size() <= 50;
+    }
+
+    // Collection Rules & Match Blocks
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isEmailVerified() && isValidUser(incoming()) 
+                     && incoming().credits == 3; // Standard: start with 3 free credits
+      
+      // Split the profile updates into explicit actions using affectedKeys() and hasOnly()
+      allow update: if isOwner(userId) && isEmailVerified() && isValidUser(incoming()) && (
+        // Action 1: Update Profile metadata (displayName, photoURL) keeping credits completely unmodified
+        (incoming().credits == existing().credits && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])) ||
+        
+        // Action 2: Safely consume exactly 1 credit for custom gallery generation
+        (incoming().credits == existing().credits - 1 && incoming().diff(existing()).affectedKeys().hasOnly(['credits', 'updatedAt'])) ||
+        
+        // Action 3: Secure Credit package purchases (Credits increment action matches standard ₹25 options)
+        (
+          (incoming().credits == existing().credits + 1 ||
+           incoming().credits == existing().credits + 5 ||
+           incoming().credits == existing().credits + 10 ||
+           incoming().credits == existing().credits + 25) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['credits', 'updatedAt'])
+        )
+      );
+
+      // Embedded Galleries Log
+      match /galleries/{galleryId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isEmailVerified() && isValidId(galleryId) && isValidGallery(incoming())
+                       && incoming().createdAt == request.time;
+        allow update, delete: if false; // Immortal records
+      }
+
+      // Auditable Transaction Receipt Ledger
+      match /transactions/{transactionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && isEmailVerified() && isValidId(transactionId) && isValidTransaction(incoming())
+                       && incoming().createdAt == request.time;
+        allow update, delete: if false; // Auditable ledger entries are strictly immutable
+      }
+    }
+  }
+}

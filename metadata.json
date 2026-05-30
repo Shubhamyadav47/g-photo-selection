@@ -1,0 +1,6 @@
+{
+  "name": "Selection Gallery SaaS",
+  "description": "SaaS for event photographers to generate client selection galleries. Free sign-up via Google, credit balance checks, credit top-ups, and interactive self-contained HTML downloads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
